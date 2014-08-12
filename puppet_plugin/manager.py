@@ -84,16 +84,16 @@ def _context_to_struct(ctx):
         'properties': ctx.properties,
         'runtime_properties': ctx.runtime_properties,
         'capabilities': _try_extract_capabilities(ctx),
-        'host_ip': _try_extract_host_ip(ctx)
+        'host_ip': _try_extract_host_ip(ctx, ctx)
     }
 
 
-def _related_to_struct(related):
+def _related_to_struct(ctx, related):
     return {
         'node_id': related.node_id,
         'properties': related.properties,
         'runtime_properties': related.runtime_properties,
-        'host_ip': _try_extract_host_ip(related)
+        'host_ip': _try_extract_host_ip(ctx, related)
     }
 
 
@@ -104,7 +104,8 @@ def _try_extract_capabilities(ctx):
         return {}
 
 
-def _try_extract_host_ip(ctx_or_related):
+def _try_extract_host_ip(ctx, ctx_or_related):
+    ctx.logger.info('ctx_or_related.runtime_properties: ' + json.dumps(ctx_or_related.runtime_properties))
     # Work around uninitialized (is None) runtime_properties - start
     if not ctx_or_related.runtime_properties:
         return None
@@ -373,7 +374,7 @@ class PuppetRunner(object):
             raise PuppetError("Puppet attributes must not contain 'cloudify'")
         facts['cloudify'] = _context_to_struct(ctx)
         if ctx.related:
-            facts['cloudify']['related'] = _related_to_struct(ctx.related)
+            facts['cloudify']['related'] = _related_to_struct(ctx, ctx.related)
         t = 'puppet.{0}.{1}.{2}.'.format(
             ctx.node_name, ctx.node_id, os.getpid())
         temp_file = tempfile.NamedTemporaryFile
