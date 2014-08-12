@@ -105,6 +105,10 @@ def _try_extract_capabilities(ctx):
 
 
 def _try_extract_host_ip(ctx_or_related):
+    # Work around uninitialized (is None) runtime_properties - start
+    if not ctx_or_related.runtime_properties:
+        return None
+    # Work around uninitialized (is None) runtime_properties - end
     try:
         return ctx_or_related.host_ip
     except NonRecoverableError:
