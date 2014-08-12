@@ -220,7 +220,6 @@ class PuppetManager(object):
         self._sudo("mkdir", "-p", *self.DIRS.values())
         self._sudo("chmod", "700", *self.DIRS.values())
         self.install_custom_facts()
-        self.configure()
 
     def refresh_packages_cache(self):
         pass
@@ -364,6 +363,7 @@ class PuppetRunner(object):
         self.execute = execute
         self.manifest = manifest
         self.install()
+        self.configure()
         facts = self.props.get('facts', {})
         if 'cloudify' in facts:
             raise PuppetError("Puppet attributes must not contain 'cloudify'")
@@ -491,11 +491,10 @@ class PuppetStandaloneRunner(PuppetRunner):
     def configure(self):
         props = self.props
         modules = props.get('modules', [])
-        if modules:
-            for module in modules:
-                installed_modules = self.get_installed_modules()
-                if module not in installed_modules:
-                    self._sudo('puppet', 'module', 'install', module)
+        for module in modules:
+            installed_modules = self.get_installed_modules()
+            if module not in installed_modules:
+                self._sudo('puppet', 'module', 'install', module)
         # Download after modules allows overriding
         if 'download' in props:
             download = props['download']
