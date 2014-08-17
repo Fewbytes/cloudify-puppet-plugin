@@ -10,6 +10,7 @@ import re
 import requests
 import subprocess
 import tempfile
+import time
 import urlparse
 
 from cloudify.exceptions import NonRecoverableError
@@ -123,9 +124,10 @@ class PuppetManager(object):
         ctx = self.ctx
         if not text:
             return
-        ctx.logger.info('*** ' + title + ' ***')
-        for line in text.splitlines():
-            ctx.logger.info(prefix + line)
+        t = '{0:.9f} '.format(time.time())
+        ctx.logger.info(t + '*** ' + title + ' ***')
+        for n, line in enumerate(text.splitlines(), start=1):
+            ctx.logger.info(t + ' ' + str(n) + ' ' + prefix + line)
 
     def _sudo(self, *args):
         """a helper to run a subprocess with sudo, raises SudoError"""
