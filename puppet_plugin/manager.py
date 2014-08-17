@@ -203,7 +203,7 @@ class PuppetManager(object):
         return self._prog_available_for_root('puppet')
 
     def install(self):
-        with RetryingLock(*PUPPET_INSTALL_LOCK):
+        with RetryingLock(self.ctx, *PUPPET_INSTALL_LOCK):
             if self.puppet_is_installed():
                 self.ctx.logger.info("Not installing Puppet as "
                                      "it's already installed")
@@ -496,7 +496,7 @@ class PuppetStandaloneRunner(PuppetRunner):
         return ret
 
     def configure(self):
-        with RetryingLock(*PUPPET_CONFIG_LOCK):
+        with RetryingLock(self.ctx, *PUPPET_CONFIG_LOCK):
             props = self.props
             modules = props.get('modules', [])
             for module in modules:
