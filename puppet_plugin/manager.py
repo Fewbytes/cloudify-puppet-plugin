@@ -202,30 +202,29 @@ class PuppetManager(object):
         return self._prog_available_for_root('puppet')
 
     def install(self):
-        with RetryingLock(self.ctx, *PUPPET_CHANGES_LOCK):
-            if self.puppet_is_installed():
-                self.ctx.logger.info("Not installing Puppet as "
-                                     "it's already installed")
-                return
-            url = self.get_repo_package_url()
-            response = requests.head(url)
-            if response.status_code != requests.codes.ok:
-                raise PuppetError("Repo package is not available (at {0})".
-                                  format(url))
+        if self.puppet_is_installed():
+            self.ctx.logger.info("Not installing Puppet as "
+                                 "it's already installed")
+            return
+        url = self.get_repo_package_url()
+        response = requests.head(url)
+        if response.status_code != requests.codes.ok:
+            raise PuppetError("Repo package is not available (at {0})".
+                              format(url))
 
-            self.ctx.logger.info("Installing package from {0}".format(url))
-            self.install_package_from_url(url)
-            self.refresh_packages_cache()
-            for p in 'puppet-common', 'puppet':
-                self.install_package(p,
-                                     self.props.get('version',
-                                                    self.DEFAULT_VERSION))
-            for package_name in self.EXTRA_PACKAGES:
-                self.install_package(package_name)
+        self.ctx.logger.info("Installing package from {0}".format(url))
+        self.install_package_from_url(url)
+        self.refresh_packages_cache()
+        for p in 'puppet-common', 'puppet':
+            self.install_package(p,
+                                 self.props.get('version',
+                                                self.DEFAULT_VERSION))
+        for package_name in self.EXTRA_PACKAGES:
+            self.install_package(package_name)
 
-            self._sudo("mkdir", "-p", *self.DIRS.values())
-            self._sudo("chmod", "700", *self.DIRS.values())
-            self.install_custom_facts()
+        self._sudo("mkdir", "-p", *self.DIRS.values())
+        self._sudo("chmod", "700", *self.DIRS.values())
+        self.install_custom_facts()
 
     def refresh_packages_cache(self):
         pass
@@ -365,61 +364,65 @@ class PuppetRunner(object):
         self.environment = env
 
     def run(self, tags=None, execute=None, manifest=None):
-        ctx = self.ctx
-        self.execute = execute
-        self.manifest = manifest
-        self.install()
-        self.configure()
-        facts = self.props.get('facts', {})
-        if 'cloudify' in facts:
-            raise PuppetError("Puppet attributes must not contain 'cloudify'")
-        facts['cloudify'] = _context_to_struct(ctx)
-        if ctx.related:
-            facts['cloudify']['related'] = _related_to_struct(ctx.related)
-        t = 'puppet.{0}.{1}.{2}.'.format(
-            ctx.node_name, ctx.node_id, os.getpid())
-        temp_file = tempfile.NamedTemporaryFile
-        facts_file = temp_file(prefix=t, suffix=".facts_in.json", delete=False)
-        json.dump(facts, facts_file, indent=4)
-        facts_file.close()
+        with RetryingLock(self.ctx, *PUPPET_CHANGES_LOCK):
+            ctx = self.ctx
+            self.execute = execute
+            self.manifest = manifest
+            self.install()
+            self.configure()
+            facts = self.props.get('facts', {})
+            if 'cloudify' in facts:
+                raise PuppetError("Puppet attributes must not contain "
+                                  "'cloudify'")
+            facts['cloudify'] = _context_to_struct(ctx)
+            if ctx.related:
+                facts['cloudify']['related'] = _related_to_struct(ctx.related)
+            t = 'puppet.{0}.{1}.{2}.'.format(
+                ctx.node_name, ctx.node_id, os.getpid())
+            temp_file = tempfile.NamedTemporaryFile
+            facts_file = temp_file(prefix=t, suffix=".facts_in.json",
+                                   delete=False)
+            json.dump(facts, facts_file, indent=4)
+            facts_file.close()
 
-        cmd = [
-            "puppet",
-        ] + self.get_runner_cmd() + [
-            "--detailed-exitcodes",
-            "--logdest", "console",
-            "--logdest", "syslog"
-        ]
+            cmd = [
+                "puppet",
+            ] + self.get_runner_cmd() + [
+                "--detailed-exitcodes",
+                "--logdest", "console",
+                "--logdest", "syslog"
+            ]
 
-        if tags:
-            cmd += ['--tags', ','.join(tags)]
+            if tags:
+                cmd += ['--tags', ','.join(tags)]
 
-        cmd = ' '.join(cmd)
+            cmd = ' '.join(cmd)
 
-        environ = self.get_run_env_vars()
-        environ = ["export {0}='{1}'\n".format(k, v)
-                   for k, v in environ.items()]
-        environ = ''.join(environ)
-        run_file = temp_file(prefix=t, suffix=".run.sh", delete=False)
-        run_file.write(
-            '#!/bin/bash -e\n'
-            'export FACTERLIB={0}\n'
-            'export CLOUDIFY_FACTS_FILE={1}\n{2}'
-            'e=0\n'
-            .format(self.DIRS['local_custom_facts'], facts_file.name, environ)
-            + cmd + ' || e=$?\n'
-            'echo Exit code: $e\n'
-            'if [ $e -eq 1 ];then exit 1;fi\n'
-            'if [ $(($e & 4)) -eq 4 ];then exit 4;fi\n'
-            'exit 0\n'
-        )
-        run_file.close()
-        self._sudo('chmod', '+x', run_file.name)
-        self.ctx.logger.info("Will run: '{0}' (in {1})".format(cmd,
-                                                               run_file.name))
-        self._sudo(run_file.name)
+            environ = self.get_run_env_vars()
+            environ = ["export {0}='{1}'\n".format(k, v)
+                       for k, v in environ.items()]
+            environ = ''.join(environ)
+            run_file = temp_file(prefix=t, suffix=".run.sh", delete=False)
+            run_file.write(
+                '#!/bin/bash -e\n'
+                'export FACTERLIB={0}\n'
+                'export CLOUDIFY_FACTS_FILE={1}\n{2}'
+                'e=0\n'
+                .format(self.DIRS['local_custom_facts'], facts_file.name,
+                        environ)
+                + cmd + ' || e=$?\n'
+                'echo Exit code: $e\n'
+                'if [ $e -eq 1 ];then exit 1;fi\n'
+                'if [ $(($e & 4)) -eq 4 ];then exit 4;fi\n'
+                'exit 0\n'
+            )
+            run_file.close()
+            self._sudo('chmod', '+x', run_file.name)
+            self.ctx.logger.info("Will run: '{0}' (in {1})".
+                                 format(cmd, run_file.name))
+            self._sudo(run_file.name)
 
-        os.remove(facts_file.name)
+            os.remove(facts_file.name)
 
     def get_modules_path(self):
         local_modules_path = os.path.join(self.DIRS['local_repo'], 'modules')
@@ -495,20 +498,19 @@ class PuppetStandaloneRunner(PuppetRunner):
         return ret
 
     def configure(self):
-        with RetryingLock(self.ctx, *PUPPET_CHANGES_LOCK):
-            props = self.props
-            modules = props.get('modules', [])
-            for module in modules:
-                installed_modules = self.get_installed_modules()
-                if module not in installed_modules:
-                    self._sudo('puppet', 'module', 'install', module)
-            # Download after modules allows overriding
-            if 'download' in props:
-                download = props['download']
-                if not isinstance(download, list):
-                    download = [download]
-                for dl in download:
-                    self._url_to_dir(dl, self.DIRS['local_repo'])
+        props = self.props
+        modules = props.get('modules', [])
+        for module in modules:
+            installed_modules = self.get_installed_modules()
+            if module not in installed_modules:
+                self._sudo('puppet', 'module', 'install', module)
+        # Download after modules allows overriding
+        if 'download' in props:
+            download = props['download']
+            if not isinstance(download, list):
+                download = [download]
+            for dl in download:
+                self._url_to_dir(dl, self.DIRS['local_repo'])
 
     def get_runner_cmd(self):
         cmd = [
