@@ -2,7 +2,7 @@ import os
 
 import lockfile
 
-__all__	= ['RetryingLock']
+__all__ = ['RetryingLock']
 
 
 class RetryingLock(object):
