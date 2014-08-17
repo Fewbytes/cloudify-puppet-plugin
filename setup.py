@@ -28,7 +28,7 @@ setuptools.setup(
     license='LICENSE',
     description='Cloudify Chef plugin',
     install_requires=[
-        'cloudify-plugins-common==3.0',
+        'cloudify-plugins-common==3.1a1',
         'lockfile==0.9.1',
     ],
     package_data={
