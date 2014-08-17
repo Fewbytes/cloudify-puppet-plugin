@@ -14,7 +14,7 @@ import urlparse
 
 from cloudify.exceptions import NonRecoverableError
 
-from retrying_lock import RetryingLock
+from puppet_plugin.retrying_lock import RetryingLock
 
 # (lock_name, retries, sleep)
 PUPPET_INSTALL_LOCK = ('puppet-install.lock', 30, 10)
