@@ -25,7 +25,7 @@ class RetryingLock(object):
             try:
                 self.file.acquire(timeout=self.sleep)
             except lockfile.LockTimeout:
-                self.ctx.logger.info("Could not lock the file '{0}'."
+                self.ctx.logger.info("Could not lock the file '{0}'. "
                                      "Will sleep for {1} seconds and then try "
                                      "again.".format(self.path, self.sleep))
             else:
